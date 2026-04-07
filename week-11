@@ -1,0 +1,116 @@
+const express = require("express");
+const jwt = require("jsonwebtoken");
+
+const app = express();
+app.use(express.json());
+
+const BASE_URL = "https://jsonplaceholder.typicode.com/users";
+const SECRET = "mysecretkey"; // use env variable in real apps
+
+// 🔹 Dummy user (no DB)
+const USER = {
+  username: "admin",
+  password: "1234"
+};
+
+// 🔐 Middleware to verify JWT
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) return res.status(401).json({ error: "Token required" });
+
+  jwt.verify(token, SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Invalid token" });
+    req.user = user;
+    next();
+  });
+}
+
+// 🔹 LOGIN → generate token
+app.post("/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (username !== USER.username || password !== USER.password) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  const token = jwt.sign({ username }, SECRET, { expiresIn: "1h" });
+
+  res.json({ message: "Login successful", token });
+});
+
+// 🔒 PROTECTED ROUTES (CRUD)
+
+// CREATE
+app.post("/students", authenticateToken, async (req, res) => {
+  try {
+    const response = await fetch(BASE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+    res.json({ message: "Created", data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// READ ALL
+app.get("/students", authenticateToken, async (req, res) => {
+  try {
+    const response = await fetch(BASE_URL);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// READ ONE
+app.get("/students/:id", authenticateToken, async (req, res) => {
+  try {
+    const response = await fetch(`${BASE_URL}/${req.params.id}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE
+app.put("/students/:id", authenticateToken, async (req, res) => {
+  try {
+    const response = await fetch(`${BASE_URL}/${req.params.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+    res.json({ message: "Updated", data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE
+app.delete("/students/:id", authenticateToken, async (req, res) => {
+  try {
+    await fetch(`${BASE_URL}/${req.params.id}`, {
+      method: "DELETE"
+    });
+
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Server
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
